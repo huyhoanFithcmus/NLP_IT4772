@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block ul %}
+     <li role="presentation" class="active">
+         <a href="#">Home</a>
+     </li>
+     <li role="presentation">
+         <a href="/sav">SA</a>
+     </li>
+{% endblock %}
+
+{% block div %}
+
+    <h1 style="color: blue">Sentiment Analysis Vietnamese</h1>
+    <hr class="my-4">
+    <br>
+    <p class="lead text-justify" style="font-size: 20px"><b>Sentiment Analysis Vietnamese (SAV)</b>
+        là một mô hình phân tích cảm xúc trong tiếng Việt với 2 lớp cảm xúc là <b>Tích cực (Positive)</b>
+        và <b>Tiêu cực (Negative)</b>.
+
+
+    <br><br><br>
+    <p><a class="btn btn-lg btn-success"  href="/sav" role="button">Try it now</a> </p>
+
+{% endblock %}
