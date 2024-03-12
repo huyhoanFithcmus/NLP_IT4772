@@ -1,38 +1,28 @@
 import os
 import time
-import tensorflow as tf
-from model import *
-from flask import Flask, render_template, url_for, request
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-from load_data import word2idx, words_list, word_vectors
-
+import torch
+from flask import Flask, render_template, request
+from transformers import RobertaForSequenceClassification, AutoTokenizer
 
 # Enable Eager Execution
-#tf.enable_eager_execution()
-#tf.executing_eagerly()
+# tf.enable_eager_execution()
+# tf.executing_eagerly()
 
-# ------------------------------------- Build model -------------------------------------------
-# Các hyperparameters
-LSTM_UNITS = 128
-N_LAYERS = 2
-NUM_CLASSES = 2
-MAX_SEQ_LENGTH = 200
+# ------------------------------------- Load Sentiment Model -------------------------------------------
+model = RobertaForSequenceClassification.from_pretrained("wonrax/phobert-base-vietnamese-sentiment")
+tokenizer = AutoTokenizer.from_pretrained("wonrax/phobert-base-vietnamese-sentiment", use_fast=False)
 
-#Build model
-model = SentimentAnalysisModel(word_vectors, LSTM_UNITS, N_LAYERS, NUM_CLASSES)
-
-#Đưa trọng số vào model
-model.load_weights(tf.train.latest_checkpoint('modelver7'))
-
-# ------------------------------------- Connect to database ------------------------------------
-os.environ["DATABASE_URL"] = "postgresql://postgres:123456@127.0.0.1:5432/sav"
-
-engine = create_engine(os.getenv("DATABASE_URL"))
-db = scoped_session(sessionmaker(bind=engine))
 # ------------------------------------- Build Web app ------------------------------------------
 app = Flask(__name__)
+
+def predict_sentiment(sentence):
+    input_ids = torch.tensor([tokenizer.encode(sentence)])
+    with torch.no_grad():
+        output = model(input_ids)
+    probabilities = torch.nn.functional.softmax(output.logits, dim=-1).tolist()[0]
+    labels = ['NEG', 'POS', 'NEU']
+    sentiment = labels[probabilities.index(max(probabilities))]
+    return sentiment, probabilities
 
 @app.route('/')
 def home():
@@ -42,26 +32,23 @@ def home():
 def sav():
     return render_template('sav.html')
 
-@app.route('/result', methods=['GET','POST'])
+@app.route('/result', methods=['POST'])
 def result():
-
     if request.method == 'POST':
         sentence = request.form['inputSentence']
         start = time.time()
-        my_prediction, prob_pos = predict(sentence, model, words_list, MAX_SEQ_LENGTH, word2idx)
+
+        # Predict sentiment using the function
+        predicted_sentiment, probabilities = predict_sentiment(sentence)
+
         end = time.time()
         time2run = end - start
 
-##  Insert to table
-        db.execute("INSERT INTO labeled_paragraph (content, label) VALUES (:content, :label)",
-                   {"content": sentence, "label": int(my_prediction)})
-        db.commit()
+        # Pass the variables to the HTML template
+        return render_template('result.html', predicted_sentiment=predicted_sentiment, sentence=sentence,
+                               probabilities=probabilities, time2run=time2run)
 
-    else:
-        return f"<h1>Please enter your paragraph vietnamese in text box !</h1>"
-
-    return render_template('result.html', prediction = my_prediction, sentence = sentence,
-                           prob_pos = prob_pos, time2run = time2run)
+    return "<h1>Please enter your paragraph in the text box!</h1>"
 
 if __name__ == '__main__':
     app.run(debug=True)
